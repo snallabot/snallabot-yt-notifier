@@ -21,7 +21,7 @@ function extractTitle(html: string) {
 router.post("/hook", async (ctx) => {
     const events = await fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
         method: "POST",
-        body: JSON.stringify({ event_type: ["ADD_CHANNEL", "REMOVE_CHANNEL"], key: "yt_channels" }),
+        body: JSON.stringify({ event_types: ["ADD_CHANNEL", "REMOVE_CHANNEL"], key: "yt_channels" }),
         headers: {
             "Content-Type": "application/json"
         }
