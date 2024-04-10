@@ -64,6 +64,7 @@ router.post("/hook", async (ctx) => {
                 .then(t => t.includes('"isLive":true') ? [{ channel_id, title: extractTitle(t), video: extractVideo(t) }] : [])
         ))
     const currentlyLiveStreaming = channels.flat()
+    console.log(`currently streaming: ${currentlyLiveStreaming}`)
     const pastBroadcasts = await Promise.all(currentlyLiveStreaming.map(c =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
             method: "POST",
@@ -80,6 +81,7 @@ router.post("/hook", async (ctx) => {
         return prev
     }, {})
     const newBroadcasts = currentlyLiveStreaming.filter(c => !channelToPastBroadcastMap[c.channel_id]?.includes(c.video))
+    console.log(`broadcasts that are new: newBroadcasts`)
     await Promise.all(newBroadcasts.map(b => fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/post", {
         method: "POST",
         body: JSON.stringify({ key: b.channel_id, event_type: "YOUTUBE_BROADCAST", delivery: "EVENT_SOURCE", video: b.video }),
