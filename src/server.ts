@@ -7,7 +7,9 @@ const router = new Router()
 
 export type SnallabotBaseEvent = { key: string, event_type: string }
 export type Trigger5Min = { key: "time", event_type: "5_MIN_TRIGGER" }
-type AddChannelEvent = { key: "yt_channels", id: string, timestamp: string, event_type: "ADD_CHANNEL", channel_id: string, discord_server: string, title_keyword: string }
+type BroadcastConfigurationEvent = { channel_id: string, role?: string, id: string, timestamp: string, title_keyword: string }
+type BroadcastConfigurationResponse = { "BROADCAST_CONFIGURATION": Array<BroadcastConfigurationEvent> }
+type AddChannelEvent = { key: "yt_channels", id: string, timestamp: string, event_type: "ADD_CHANNEL", channel_id: string, discord_server: string }
 type RemoveChannelEvent = { key: "yt_channels", id: string, timestamp: string, event_type: "REMOVE_CHANNEL", channel_id: string, discord_server: string }
 type BroadcastEvent = { key: string, id: string, timestamp: string, event_type: "YOUTUBE_BROADCAST", video: string }
 type EventQueryResponse = { "ADD_CHANNEL": Array<AddChannelEvent>, "REMOVE_CHANNEL": Array<RemoveChannelEvent> }
@@ -25,8 +27,6 @@ function extractVideo(html: string) {
     const linkTag = sliced.slice(0, sliced.indexOf(">"))
     return linkTag.replace('<link rel="canonical" href="', "").replace('>', "").replace('"', "")
 }
-
-
 
 router.post("/hook", async (ctx) => {
     const events = await fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
@@ -55,14 +55,37 @@ router.post("/hook", async (ctx) => {
     })
     const currentChannelServers = Object.keys(state).map(k => {
         const [channel_id, discord_server] = k.split("|")
-        return { channel_id, discord_server, title_keyword: state[k][0].title_keyword }
+        return { channel_id, discord_server }
     })
-    const channels = await Promise.all(currentChannelServers.map(c => c.channel_id)
+    const currentChannels = [...new Set(currentChannelServers.map(c => c.channel_id))]
+    const currentServers = [...new Set(currentChannelServers.map(c => c.discord_server))]
+    const channels = await Promise.all(currentChannels
         .map(channel_id =>
             fetch(`https://www.youtube.com/channel/${channel_id}/live`)
                 .then(res => res.text())
                 .then(t => t.includes('"isLive":true') ? [{ channel_id, title: extractTitle(t), video: extractVideo(t) }] : [])
         ))
+    const serverTitleKeywords = await Promise.all(currentServers.map(server =>
+        fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
+            method: "POST",
+            body: JSON.stringify({ event_types: ["BROADCAST_CONFIGURATION"], key: server }),
+            headers: {
+                "Content-Type": "application/json"
+            }
+        })
+            .then(res => res.json() as Promise<BroadcastConfigurationResponse>)
+            .then(r => {
+                const sortedEvents = r.BROADCAST_CONFIGURATION.sort((a: BroadcastConfigurationEvent, b: BroadcastConfigurationEvent) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                if (sortedEvents.length === 0) {
+                    console.error(`${server} is not configured for Broadcasts`)
+                    return []
+                } else {
+                    const configuration = sortedEvents[0]
+                    return [[server, configuration.title_keyword]]
+                }
+            })))
+    const serverTitleMap: { [key: string]: string } = Object.fromEntries(serverTitleKeywords.flat())
+    console.log(serverTitleMap)
     const currentlyLiveStreaming = channels.flat()
     console.log(`currently streaming: ${JSON.stringify(currentlyLiveStreaming)}`)
     const pastBroadcasts = await Promise.all(currentlyLiveStreaming.map(c =>
@@ -90,11 +113,9 @@ router.post("/hook", async (ctx) => {
         }
     })
     ))
-    const channelTitleMap = newBroadcasts.map(c => ({ [c.channel_id]: { title: c.title, video: c.video } })).reduce((prev, curr) => {
-        Object.assign(prev, curr)
-        return prev
-    }, {})
-    await Promise.all(currentChannelServers.filter(c => channelTitleMap[c.channel_id] && channelTitleMap[c.channel_id].title.includes(c.title_keyword)).map(c =>
+    const channelTitleMap: { [key: string]: { title: string, video: string } } = Object.fromEntries(newBroadcasts.map(c => [[c.channel_id], { title: c.title, video: c.video }]))
+    console.log(channelTitleMap)
+    await Promise.all(currentChannelServers.filter(c => channelTitleMap[c.channel_id] && channelTitleMap[c.channel_id].title.includes(serverTitleMap[c.discord_server].toLowerCase())).map(c =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/post", {
             method: "POST",
             body: JSON.stringify({ key: c.discord_server, event_type: "MADDEN_BROADCAST", delivery: "EVENT_SOURCE", title: channelTitleMap[c.channel_id].title, video: channelTitleMap[c.channel_id].video }),
