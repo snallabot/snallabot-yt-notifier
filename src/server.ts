@@ -130,7 +130,7 @@ router.post("/hook", async (ctx) => {
     ))
     const channelTitleMap: { [key: string]: { title: string, video: string } } = Object.fromEntries(newBroadcasts.map(c => [[c.channel_id], { title: c.title, video: c.video }]))
     console.log(channelTitleMap)
-    await Promise.all(currentChannelServers.filter(c => channelTitleMap[c.channel_id] && channelTitleMap[c.channel_id].title.includes(serverTitleMap[c.discord_server].toLowerCase())).map(c =>
+    await Promise.all(currentChannelServers.filter(c => channelTitleMap[c.channel_id] && channelTitleMap[c.channel_id].title.toLowerCase().includes(serverTitleMap[c.discord_server].toLowerCase())).map(c =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/post", {
             method: "POST",
             body: JSON.stringify({ key: c.discord_server, event_type: "MADDEN_BROADCAST", delivery: "EVENT_SOURCE", title: channelTitleMap[c.channel_id].title, video: channelTitleMap[c.channel_id].video }),
