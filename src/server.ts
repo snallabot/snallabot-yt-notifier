@@ -14,6 +14,9 @@ type RemoveChannelEvent = { key: "yt_channels", id: string, timestamp: string, e
 type BroadcastEvent = { key: string, id: string, timestamp: string, event_type: "YOUTUBE_BROADCAST", video: string }
 type EventQueryResponse = { "ADD_CHANNEL": Array<AddChannelEvent>, "REMOVE_CHANNEL": Array<RemoveChannelEvent> }
 
+type ConfigureRequest = { discord_server: string, youtube_url: string, event_type: string }
+type ListRequest = { discord_server: string }
+
 function extractTitle(html: string) {
     const titleTagIndex = html.indexOf('<meta name="title"')
     const sliced = html.slice(titleTagIndex)
@@ -28,7 +31,14 @@ function extractVideo(html: string) {
     return linkTag.replace('<link rel="canonical" href="', "").replace('>', "").replace('"', "")
 }
 
-router.post("/hook", async (ctx) => {
+function extractChannelId(html: string) {
+    const linkTagIndex = html.indexOf('<link rel="canonical" href="')
+    const sliced = html.slice(linkTagIndex)
+    const linkTag = sliced.slice(0, sliced.indexOf(">"))
+    return linkTag.replace('<link rel="canonical" href="', "").replace('>', "").replace('"', "").replace("https://www.youtube.com/channel/", "")
+}
+
+async function retrieveCurrentState(): Promise<Array<{ channel_id: string, discord_server: string }>> {
     const events = await fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
         method: "POST",
         body: JSON.stringify({ event_types: ["ADD_CHANNEL", "REMOVE_CHANNEL"], key: "yt_channels" }),
@@ -53,10 +63,15 @@ router.post("/hook", async (ctx) => {
             delete state[k]
         }
     })
-    const currentChannelServers = Object.keys(state).map(k => {
+    return Object.keys(state).map(k => {
         const [channel_id, discord_server] = k.split("|")
         return { channel_id, discord_server }
     })
+
+}
+
+router.post("/hook", async (ctx) => {
+    const currentChannelServers = await retrieveCurrentState()
     const currentChannels = [...new Set(currentChannelServers.map(c => c.channel_id))]
     const currentServers = [...new Set(currentChannelServers.map(c => c.discord_server))]
     const channels = await Promise.all(currentChannels
@@ -127,6 +142,30 @@ router.post("/hook", async (ctx) => {
 
     ctx.status = 200
 })
+    .post("/configure", async (ctx) => {
+        const request = ctx.request.body as ConfigureRequest
+        const channelId = await fetch(request.youtube_url).then(r => r.text()).then(t => extractChannelId(t))
+        if (channelId) {
+            await fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/post", {
+                method: "POST",
+                body: JSON.stringify({ key: "yt_channels", event_type: request.event_type, delivery: "EVENT_SOURCE", channel_id: channelId, discord_server: request.discord_server }),
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            })
+            ctx.status = 200
+        } else {
+            ctx.status = 400
+        }
+    })
+    .post("/list", async (ctx) => {
+        const request = ctx.request.body as ListRequest
+        const state = await retrieveCurrentState()
+        const channels = state.filter(c => c.discord_server === request.discord_server).map(c => c.channel_id)
+            .map(channel => `https://www.youtube.com/channel/${channel}`)
+        ctx.status = 200
+        ctx.body = channels
+    })
 
 app.use(bodyParser({ enableTypes: ["json"], encoding: "utf-8" }))
     .use(async (ctx, next) => {
