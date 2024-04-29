@@ -41,7 +41,7 @@ function extractChannelId(html: string) {
 async function retrieveCurrentState(): Promise<Array<{ channel_id: string, discord_server: string }>> {
     const events = await fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
         method: "POST",
-        body: JSON.stringify({ event_types: ["ADD_CHANNEL", "REMOVE_CHANNEL"], key: "yt_channels" }),
+        body: JSON.stringify({ event_types: ["ADD_CHANNEL", "REMOVE_CHANNEL"], key: "yt_channels", after: 0 }),
         headers: {
             "Content-Type": "application/json"
         }
@@ -83,7 +83,7 @@ router.post("/hook", async (ctx) => {
     const serverTitleKeywords = await Promise.all(currentServers.map(server =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
             method: "POST",
-            body: JSON.stringify({ event_types: ["BROADCAST_CONFIGURATION"], key: server }),
+            body: JSON.stringify({ event_types: ["BROADCAST_CONFIGURATION"], key: server, after: 0 }),
             headers: {
                 "Content-Type": "application/json"
             }
@@ -103,10 +103,12 @@ router.post("/hook", async (ctx) => {
     console.log(serverTitleMap)
     const currentlyLiveStreaming = channels.flat()
     console.log(`currently streaming: ${JSON.stringify(currentlyLiveStreaming)}`)
+    const startTime = new Date()
+    startTime.setDate(startTime.getDate() - 1)
     const pastBroadcasts = await Promise.all(currentlyLiveStreaming.map(c =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
             method: "POST",
-            body: JSON.stringify({ event_types: ["YOUTUBE_BROADCAST"], key: c.channel_id }),
+            body: JSON.stringify({ event_types: ["YOUTUBE_BROADCAST"], key: c.channel_id, after: startTime.getTime() }),
             headers: {
                 "Content-Type": "application/json"
             }
@@ -118,6 +120,7 @@ router.post("/hook", async (ctx) => {
         Object.assign(prev, curr)
         return prev
     }, {})
+
     const newBroadcasts = currentlyLiveStreaming.filter(c => !channelToPastBroadcastMap[c.channel_id]?.includes(c.video))
     console.log(`broadcasts that are new: ${JSON.stringify(newBroadcasts)}`)
     await Promise.all(newBroadcasts.map(b => fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/post", {
