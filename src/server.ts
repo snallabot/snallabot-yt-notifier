@@ -103,10 +103,12 @@ router.post("/hook", async (ctx) => {
     console.log(serverTitleMap)
     const currentlyLiveStreaming = channels.flat()
     console.log(`currently streaming: ${JSON.stringify(currentlyLiveStreaming)}`)
+    const startTime = new Date()
+    startTime.setDate(startTime.getDate() - 1)
     const pastBroadcasts = await Promise.all(currentlyLiveStreaming.map(c =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
             method: "POST",
-            body: JSON.stringify({ event_types: ["YOUTUBE_BROADCAST"], key: c.channel_id, after:  }),
+            body: JSON.stringify({ event_types: ["YOUTUBE_BROADCAST"], key: c.channel_id, after: startTime.getTime() }),
             headers: {
                 "Content-Type": "application/json"
             }
@@ -118,13 +120,12 @@ router.post("/hook", async (ctx) => {
         Object.assign(prev, curr)
         return prev
     }, {})
-    const startTime = new Date()
-    startTime.setDate(startTime.getDate() - 1)
+
     const newBroadcasts = currentlyLiveStreaming.filter(c => !channelToPastBroadcastMap[c.channel_id]?.includes(c.video))
     console.log(`broadcasts that are new: ${JSON.stringify(newBroadcasts)}`)
     await Promise.all(newBroadcasts.map(b => fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/post", {
         method: "POST",
-        body: JSON.stringify({ key: b.channel_id, event_type: "YOUTUBE_BROADCAST", delivery: "EVENT_SOURCE", video: b.video, after: startTime.getTime() }),
+        body: JSON.stringify({ key: b.channel_id, event_type: "YOUTUBE_BROADCAST", delivery: "EVENT_SOURCE", video: b.video }),
         headers: {
             "Content-Type": "application/json"
         }
