@@ -38,6 +38,11 @@ function extractChannelId(html: string) {
     return linkTag.replace('<link rel="canonical" href="', "").replace('>', "").replace('"', "").replace("https://www.youtube.com/channel/", "")
 }
 
+function isStreaming(html: string) {
+    // channel is only streaming when this occurrs twice. if its once its a scheduled broadcast
+    return (html.match(/"isLive":true/g) || []).length == 2
+}
+
 async function retrieveCurrentState(): Promise<Array<{ channel_id: string, discord_server: string }>> {
     const events = await fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
         method: "POST",
@@ -78,7 +83,7 @@ router.post("/hook", async (ctx) => {
         .map(channel_id =>
             fetch(`https://www.youtube.com/channel/${channel_id}/live`)
                 .then(res => res.text())
-                .then(t => t.includes('"isLive":true') ? [{ channel_id, title: extractTitle(t), video: extractVideo(t) }] : [])
+                .then(t => isStreaming(t) ? [{ channel_id, title: extractTitle(t), video: extractVideo(t) }] : [])
         ))
     const serverTitleKeywords = await Promise.all(currentServers.map(server =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
