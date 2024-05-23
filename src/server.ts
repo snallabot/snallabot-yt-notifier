@@ -113,7 +113,7 @@ router.post("/hook", async (ctx) => {
     const pastBroadcasts = await Promise.all(currentlyLiveStreaming.map(c =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
             method: "POST",
-            body: JSON.stringify({ event_types: ["YOUTUBE_BROADCAST"], key: c.channel_id, after: startTime.getTime() }),
+            body: JSON.stringify({ event_types: ["YOUTUBE_BROADCAST"], key: c.channel_id, after: startTime.getTime(), limit: 2 }),
             headers: {
                 "Content-Type": "application/json"
             }
