@@ -88,7 +88,7 @@ router.post("/hook", async (ctx) => {
     const serverTitleKeywords = await Promise.all(currentServers.map(server =>
         fetch("https://snallabot-event-sender-b869b2ccfed0.herokuapp.com/query", {
             method: "POST",
-            body: JSON.stringify({ event_types: ["BROADCAST_CONFIGURATION"], key: server, after: 0 }),
+            body: JSON.stringify({ event_types: ["BROADCAST_CONFIGURATION"], key: server, after: 0, limit: 1 }),
             headers: {
                 "Content-Type": "application/json"
             }
