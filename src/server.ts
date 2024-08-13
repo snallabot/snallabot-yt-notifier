@@ -40,7 +40,7 @@ function extractChannelId(html: string) {
 
 function isStreaming(html: string) {
     // channel is only streaming when this occurrs twice. if its once its a scheduled broadcast
-    return (html.match(/"isLive":true/g) || []).length == 2
+    return (html.match(/"isLive":true/g) || []).length == 1
 }
 
 async function retrieveCurrentState(): Promise<Array<{ channel_id: string, discord_server: string }>> {
